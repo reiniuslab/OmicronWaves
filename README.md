@@ -18,4 +18,4 @@ more contagious and currently outcompetes the BA.1 variant across populations.
 
 ---
 
-This repository contains code to reproduce findings in our [PRE-PRINT](https://doi.org/10.1101/2022.03.26.22272984)
+This repository contains code to reproduce findings in our [PRE-PRINT](https://doi.org/10.1101/2022.03.26.22272984), raw sequencing data is available in [E-MTAB-11650](https://www.ebi.ac.uk/arrayexpress/experiments/E-MTAB-11650) and assembled genomes are available under accessions EPI_ISL_11414777 - 11415389 and EPI_ISL_11450500 - 11450677) at [GISAID](https://gisaid.org)
