@@ -1,5 +1,20 @@
 library(data.table)
 
+##
+
+median_cl_boot <- function(x, conf = 0.95) {
+  # function from http://rstudio-pubs-static.s3.amazonaws.com/28101_41a7995107d94c8dbb07bbf7cd7e8291.html
+  lconf <- (1 - conf)/2
+  uconf <- 1 - lconf
+  require(boot)
+  bmedian <- function(x, ind) median(x[ind])
+  bt <- boot(x, bmedian, 1000)
+  bb <- boot.ci(bt, type = "perc")
+  data.frame(y = median(x), ymin = quantile(bt$t, lconf), ymax = quantile(bt$t, uconf))
+}
+
+##
+
 # pangolin results
 pangolin <- fread("data_decoded/Pangolin_results_denovo_DECODED.csv")
 pangolin[, Sample := gsub("/.*", "", `Sequence name`)]
@@ -7,7 +22,7 @@ pangolin[, Sample := gsub("/.*", "", `Sequence name`)]
 # qPCR data
 oxf.clin <- fread("data_decoded/OXF_20220308_DECODED.csv")
 oxf.clin[, Analysis_Date := as.Date(Analysis_Date, tryFormats = c("%d/%m/%Y"))]
-oxf.cont <- fread("data_decoded/Control_samples_BXF_OXF_DECODED.csv")
+oxf.cont <- fread("data_decoded/Control_samples_BXF_OXF_20220308_DECODED.csv")
 
 # merge CT data
 oxf.merge <- rbind(oxf.cont, oxf.clin, fill=T)
@@ -78,7 +93,8 @@ ggsave2("plots/pcr_lineage_assignment_clinical.pdf", width = 3, height = 3, p.pc
 # ct differences
 library(ggbeeswarm)
 library(ggpubr)
-# oxf.merge[OXF_N1_Ct != "Undetermined", wilcox.test(as.numeric(OXF_N1_Ct)~OXF_OmiS_Ct != "Undetermined")]$p.value # p-value
+oxf.merge[OXF_N1_Ct != "Undetermined", wilcox.test(as.numeric(OXF_N1_Ct)~OXF_OmiS_Ct != "Undetermined")]$p.value # p-value
+oxf.merge[OXF_N1_Ct != "Undetermined", median_cl_boot(as.numeric(OXF_N1_Ct)), by = OXF_OmiS_Ct != "Undetermined"] # c.i
 
 p.pcr.n.all <-
 ggplot(oxf.merge[OXF_N1_Ct != "Undetermined"], aes(x=OXF_OmiS_Ct != "Undetermined", y = as.numeric(OXF_N1_Ct))) +
@@ -120,7 +136,8 @@ ggsave2("plots/pcr_rnasep_fulldata.pdf", width = 5, height = 2, p.pcr.rnasep.all
 ggsave2("plots/pcr_n_lineage.pdf", width = 3, height = 5, p.pcr.n.lin)
 
 # ct over time
-oxf.clin[PCR_Outcome == "POSITIVE", summary(lm(as.numeric(OXF_N1_Ct)~Analysis_Date+OXF_Outcome ))]
+library(quantreg)
+oxf.clin[PCR_Outcome == "POSITIVE", summary(rq(as.numeric(OXF_N1_Ct)~Analysis_Date+OXF_Outcome ))] # quantile regression
 
 p.pcr.timeseries.n <-
 ggplot(oxf.clin[PCR_Outcome == "POSITIVE"], aes(y = as.numeric(OXF_N1_Ct), x = as.factor(Analysis_Date), fill=OXF_Outcome)) +
@@ -146,3 +163,34 @@ ggsave2("plots/pcr_timeseries_control.pdf", width = 12, height = 3,
 plot_grid(align = "hv", axis = "trbl", rel_widths = c(1,0.5),
   p.pcr.timeseries.n, p.pcr.timeseries.dens
 ))
+
+# ct per region
+oxf.clin[PCR_Outcome == "POSITIVE" & !grepl("^AAA_", Region), median(as.numeric(OXF_N1_Ct)[OXF_Outcome == "Omicron (BA.1) POSITIVE"], na.rm = T) - median(as.numeric(OXF_N1_Ct)[OXF_Outcome == "Omicron (BA.1) NEGATIVE"], na.rm = T), by="Region"][,c("avg" = mean(V1), "sd" = sd(V1), "range" = range(V1) )] # difference per region
+
+p.pcr.region.n <-
+ggplot(oxf.clin[PCR_Outcome == "POSITIVE" & !grepl("^AAA_", Region)], aes(y = as.numeric(OXF_N1_Ct), x="", fill = OXF_Outcome)) +
+  geom_boxplot() +
+  stat_summary(fun = "median", geom="text", show.legend = F, position = position_dodge(0.75), aes(label = round(-..y.., 2) )) +
+  stat_summary(fun.data = function(x) return(data.frame(label=paste0("n = ",length(x)), y=-16)), geom="text", aes(col=OXF_Outcome) ) +
+  stat_compare_means(tip.length = 0, aes(label = signif(..p.., 2) ) ) +
+  facet_wrap(~Region, nrow=2) +
+  labs(y = "N gene Ct") +
+  #coord_cartesian(ylim =c(32,18)) +
+  scale_fill_brewer(palette="Paired", aesthetics = c("fill", "col")) +
+  scale_y_reverse() +
+  theme_cowplot() +
+  theme(strip.background = element_blank(), panel.background = element_rect(colour="black"), axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank())
+
+ggsave2("plots/pcr_region_control.pdf", width = 6, height = 3, p.pcr.region.n)
+
+ggplot(oxf.clin[PCR_Outcome == "POSITIVE" & !grepl("^AAA_", Region)], aes(y = as.numeric(OXF_N1_Ct), x=Analysis_Date > as.IDate("2022-02-09"), col = OXF_Outcome)) +
+  geom_boxplot(show.legend = T) +
+  stat_summary(fun = "median", geom="text", show.legend = F, position = position_dodge(0.75), aes(label = round(-..y.., 2) )) +
+  #stat_compare_means(tip.length = 0, step.increase = 0.025 ) +
+  facet_grid(~Region, scales="free_x") +
+  labs(y = "N gene Ct") +
+  scale_fill_brewer(palette="Paired", aesthetics = c("fill", "col")) +
+  scale_x_discrete(drop=FALSE) +
+  scale_y_reverse() +
+  theme_cowplot() +
+  theme(strip.background = element_blank())
