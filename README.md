@@ -1,4 +1,4 @@
-# Monitoring of the SARS-CoV-2 Omicron BA.1/BA.2 variant transition in the Swedish population reveals higher viral quantity in BA.2 cases
+# Monitoring of the SARS-CoV-2 Omicron BA.1/BA.2 lineage transition in the Swedish population reveals increased viral RNA levels in BA.2 cases
 
 Antonio Lentini<sup>1</sup>, Antonio Pereira<sup>2</sup>, Ola Winqvist<sup>2</sup>, Björn Reinius<sup>1</sup>
 
